@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>행사 참석자 관리</title>
+<meta name="description" content="행사 참석자 등록·확인·출석을 한 화면에서 관리하는 단일 페이지 도구. 출석 시각 기록과 CSV 내보내기를 지원합니다.">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="canonical" href="https://attendees.vercel.app/">
+<link rel="icon" href='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✓</text></svg>'>
+
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="행사 참석자 관리">
+<meta property="og:title" content="행사 참석자 관리">
+<meta property="og:description" content="등록·확인·출석을 한 화면에서. 출석 시각 기록과 CSV 내보내기를 지원하는 단일 페이지 도구.">
+<meta property="og:url" content="https://attendees.vercel.app/">
+<meta property="og:image" content="https://attendees.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="행사 참석자 관리 앱 화면 — 등록 7명, 출석 3명, 출석률 50%">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="행사 참석자 관리">
+<meta name="twitter:description" content="등록·확인·출석을 한 화면에서. localStorage 기반 단일 페이지 도구.">
+<meta name="twitter:image" content="https://attendees.vercel.app/og.png">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --main: #0a0a0a;
+    --accent: #666666;
+    --bg: #f0f0f0;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --sub-text: #6b7280;
+  }
+
+  body {
+    font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--main);
+    letter-spacing: -0.3px;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 28px 16px 64px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; }
+
+  header {
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+
+  .subtitle { font-size: 13px; color: var(--sub-text); margin-top: 6px; }
+
+  .guide {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    overflow: hidden;
+  }
+
+  .guide-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 22px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+  }
+
+  .guide-header:hover { background: var(--bg); }
+
+  .guide-title {
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .guide-toggle-icon {
+    font-size: 14px;
+    color: var(--accent);
+    transition: transform 0.2s ease;
+  }
+
+  .guide.collapsed .guide-toggle-icon { transform: rotate(-90deg); }
+
+  .guide-body {
+    padding: 6px 22px 22px;
+    font-size: 14px;
+    line-height: 1.7;
+    border-top: 1px solid var(--border);
+  }
+
+  .guide.collapsed .guide-body { display: none; }
+
+  .guide-body h4 {
+    font-size: 13px;
+    font-weight: 800;
+    margin-top: 16px;
+    margin-bottom: 6px;
+    letter-spacing: -0.2px;
+  }
+
+  .guide-body h4:first-child { margin-top: 10px; }
+
+  .guide-body p { margin-bottom: 8px; color: var(--main); font-size: 14px; }
+
+  .guide-body ol, .guide-body ul {
+    padding-left: 22px;
+    margin-bottom: 6px;
+  }
+
+  .guide-body li {
+    margin-bottom: 6px;
+    font-size: 14px;
+    color: var(--main);
+  }
+
+  .guide-body li strong { color: var(--main); font-weight: 700; }
+
+  .guide-note {
+    background: var(--bg);
+    border-left: 3px solid var(--accent);
+    padding: 12px 14px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--sub-text);
+    border-radius: 0 6px 6px 0;
+    line-height: 1.6;
+  }
+
+  .guide-note strong { color: var(--main); }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (min-width: 768px) {
+    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(10,10,10,0.15);
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--sub-text);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-number {
+    font-size: 90px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    line-height: 1.05;
+    margin-top: 6px;
+  }
+
+  @media (min-width: 768px) {
+    .stat-number { font-size: 120px; }
+  }
+
+  @media (max-width: 480px) {
+    .stat-number { font-size: 64px; letter-spacing: -1.5px; }
+  }
+
+  .stat-number.accent { color: var(--accent); }
+
+  .progress-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+
+  .progress-label {
+    font-size: 13px;
+    color: var(--sub-text);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .progress-percent {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .progress-bar {
+    height: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s ease;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  @media (min-width: 768px) {
+    .layout { grid-template-columns: 340px 1fr; }
+  }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+
+  .panel-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--main);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .form-group { margin-bottom: 14px; }
+
+  .form-label {
+    display: block;
+    font-size: 12px;
+    color: var(--sub-text);
+    margin-bottom: 6px;
+  }
+
+  .form-input, .form-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--main);
+    background: var(--card);
+    letter-spacing: -0.3px;
+    transition: border-color 0.15s ease;
+  }
+
+  .form-input:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--main);
+  }
+
+  .btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--main);
+    color: var(--card);
+    border: none;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: -0.3px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    margin-top: 4px;
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(10,10,10,0.15);
+  }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .search-input {
+    flex: 1;
+    min-width: 180px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: -0.3px;
+    transition: border-color 0.15s ease;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--main);
+  }
+
+  .filter-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .filter-tab {
+    padding: 8px 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--sub-text);
+    transition: all 0.15s ease;
+  }
+
+  .filter-tab:hover {
+    color: var(--main);
+    border-color: var(--main);
+  }
+
+  .filter-tab.active {
+    background: var(--accent);
+    color: var(--card);
+    border-color: var(--accent);
+  }
+
+  .export-btn {
+    padding: 8px 14px;
+    background: var(--card);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .export-btn:hover {
+    color: var(--main);
+    border-color: var(--main);
+  }
+
+  .table-wrap { overflow-x: auto; margin-top: 16px; }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  thead { border-bottom: 2px solid var(--main); }
+
+  th {
+    text-align: left;
+    padding: 10px 8px;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--sub-text);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  td {
+    padding: 14px 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    vertical-align: middle;
+  }
+
+  tbody tr { transition: background 0.15s ease; }
+  tbody tr:hover td { background: var(--bg); }
+
+  .name-cell {
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease;
+  }
+
+  .name-cell:hover { color: var(--accent); }
+
+  .org-line { font-size: 13px; color: var(--main); }
+  .contact-line { font-size: 12px; color: var(--sub-text); margin-top: 2px; }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--sub-text);
+    letter-spacing: -0.2px;
+  }
+
+  .badge.accent {
+    background: var(--accent);
+    color: var(--card);
+  }
+
+  .check-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--card);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+
+  .check-icon.empty {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: transparent;
+  }
+
+  .check-icon:hover { transform: scale(1.08); }
+
+  .delete-btn {
+    padding: 5px 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--sub-text);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .delete-btn:hover {
+    color: var(--main);
+    border-color: var(--main);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 56px 24px;
+    color: var(--sub-text);
+    font-size: 13px;
+  }
+
+  .hint {
+    font-size: 12px;
+    color: var(--sub-text);
+    margin-top: 12px;
+    text-align: center;
+  }
+
+  @media (max-width: 767px) {
+    .col-org, .col-status { display: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>행사 참석자 관리</h1>
+      <p class="subtitle">등록 · 확인 · 출석을 한 화면에서</p>
+    </header>
+
+    <section class="guide" id="guide">
+      <div class="guide-header" id="guideHeader" role="button" tabindex="0" aria-expanded="true" aria-controls="guideBody">
+        <span class="guide-title">사용 안내</span>
+        <span class="guide-toggle-icon" aria-hidden="true">▾</span>
+      </div>
+      <div class="guide-body" id="guideBody">
+        <h4>이 앱은 누가, 어떻게 사용하나요?</h4>
+        <p>이 앱은 <strong>행사 운영자 한 명</strong>이 한 기기에서 사용하는 도구입니다. 모든 데이터는 이 브라우저에만 저장되며 다른 기기와 자동 동기화되지 않습니다.</p>
+
+        <h4>기본 사용 흐름</h4>
+        <ol>
+          <li><strong>행사 전</strong> — 좌측 "참석자 등록" 폼에서 이름·연락처·소속을 입력하고 참석 확인 상태(예정/확정/불참)를 지정합니다.</li>
+          <li><strong>행사 당일</strong> — 도착한 참석자의 이름이나 체크 아이콘을 클릭하면 출석 처리됩니다. 다시 클릭하면 해제됩니다.</li>
+          <li><strong>행사 후</strong> — "CSV 내보내기"로 출석 시각이 포함된 명단을 엑셀 파일로 받습니다.</li>
+          <li><strong>다음 회차 진행 시</strong> — "출석 초기화"는 명단은 그대로 두고 출석 체크만 모두 해제합니다.</li>
+        </ol>
+
+        <h4>활용 방법 두 가지</h4>
+        <ul>
+          <li><strong>관리자 직접 체크</strong> — 운영자가 입구에서 도착을 확인하며 직접 이름을 클릭합니다.</li>
+          <li><strong>셀프 체크인</strong> — 노트북·태블릿을 입구에 두고 참석자가 직접 자기 이름을 클릭합니다. (단, "삭제" 버튼이 노출되므로 분실·오삭제에 주의)</li>
+        </ul>
+
+        <div class="guide-note">
+          <strong>주의</strong> · 브라우저의 사이트 데이터를 지우면 명단도 함께 사라집니다. 행사 전후로 CSV 백업을 권장합니다. 시크릿(프라이빗) 창에서는 창을 닫는 순간 데이터가 사라지니 일반 창을 사용하세요.
+        </div>
+      </div>
+    </section>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">총 등록</div>
+        <div class="stat-number" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">출석 완료</div>
+        <div class="stat-number accent" id="statPresent">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">미출석</div>
+        <div class="stat-number" id="statAbsent">0</div>
+      </div>
+    </div>
+
+    <div class="progress-section">
+      <div class="progress-header">
+        <span class="progress-label" id="progressLabel">출석률</span>
+        <span class="progress-percent" id="progressPercent">0%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <aside class="panel">
+        <h2 class="panel-title">참석자 등록</h2>
+        <div class="form-group">
+          <label class="form-label" for="nameInput">이름 *</label>
+          <input type="text" id="nameInput" class="form-input" placeholder="홍길동" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="contactInput">연락처</label>
+          <input type="text" id="contactInput" class="form-input" placeholder="010-0000-0000" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="orgInput">소속</label>
+          <input type="text" id="orgInput" class="form-input" placeholder="회사 · 단체" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="statusInput">참석 확인</label>
+          <select id="statusInput" class="form-select">
+            <option value="예정">예정</option>
+            <option value="확정">확정</option>
+            <option value="불참">불참</option>
+          </select>
+        </div>
+        <button class="btn" id="addBtn">등록</button>
+      </aside>
+
+      <section class="panel">
+        <h2 class="panel-title">명단</h2>
+        <div class="toolbar">
+          <input type="text" id="searchInput" class="search-input" placeholder="이름 · 연락처 · 소속 검색" autocomplete="off">
+          <button class="export-btn" id="resetBtn" title="출석 체크만 초기화 (명단 유지)">출석 초기화</button>
+          <button class="export-btn" id="exportBtn">CSV 내보내기</button>
+        </div>
+        <div class="filter-tabs" id="filterTabs">
+          <button class="filter-tab active" data-filter="all">전체</button>
+          <button class="filter-tab" data-filter="present">출석</button>
+          <button class="filter-tab" data-filter="absent">미출석</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 44px;">출석</th>
+                <th>이름</th>
+                <th class="col-org">소속 · 연락처</th>
+                <th class="col-status">상태</th>
+                <th style="width: 64px;"></th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+
+        <p class="hint">이름 또는 체크 아이콘을 클릭하면 출석 상태가 토글됩니다.</p>
+      </section>
+    </div>
+  </div>
+
+<script>
+  const STORAGE_KEY = 'event_attendees_v1';
+  const GUIDE_KEY = 'event_guide_collapsed_v1';
+  let attendees = loadAttendees();
+  let activeFilter = 'all';
+  let searchQuery = '';
+
+  const $ = (id) => document.getElementById(id);
+
+  function loadAttendees() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(attendees));
+  }
+
+  function isDuplicate(name) {
+    const normalized = name.trim().toLowerCase();
+    return attendees.some(a => a.name.trim().toLowerCase() === normalized);
+  }
+
+  function addAttendee() {
+    const name = $('nameInput').value.trim();
+    const contact = $('contactInput').value.trim();
+    const org = $('orgInput').value.trim();
+    const status = $('statusInput').value;
+
+    if (!name) {
+      alert('이름을 입력해 주세요.');
+      $('nameInput').focus();
+      return;
+    }
+
+    if (isDuplicate(name)) {
+      if (!confirm("'" + name + "' 이름이 이미 등록되어 있습니다. 그래도 추가할까요?")) {
+        return;
+      }
+    }
+
+    attendees.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name, contact, org, status,
+      present: false,
+      createdAt: new Date().toISOString()
+    });
+
+    save();
+    $('nameInput').value = '';
+    $('contactInput').value = '';
+    $('orgInput').value = '';
+    $('statusInput').value = '예정';
+    $('nameInput').focus();
+    render();
+  }
+
+  function togglePresent(id) {
+    const a = attendees.find(x => x.id === id);
+    if (!a) return;
+    a.present = !a.present;
+    a.checkedInAt = a.present ? new Date().toISOString() : null;
+    save();
+    render();
+  }
+
+  function resetAllPresent() {
+    if (attendees.length === 0) {
+      alert('등록된 참석자가 없습니다.');
+      return;
+    }
+    const count = attendees.filter(a => a.present).length;
+    if (count === 0) {
+      alert('현재 출석 처리된 참석자가 없습니다.');
+      return;
+    }
+    if (!confirm('현재 ' + count + '명의 출석 상태가 모두 초기화됩니다.\n명단은 그대로 유지됩니다. 진행할까요?')) return;
+    attendees.forEach(a => {
+      a.present = false;
+      a.checkedInAt = null;
+    });
+    save();
+    render();
+  }
+
+  function deleteAttendee(id) {
+    const a = attendees.find(x => x.id === id);
+    if (!a) return;
+    if (!confirm("'" + a.name + "' 님을 명단에서 삭제할까요?")) return;
+    attendees = attendees.filter(x => x.id !== id);
+    save();
+    render();
+  }
+
+  function calculateStats(list) {
+    const total = list.length;
+    const present = list.filter(a => a.present).length;
+    const absent = total - present;
+    // 출석률 분모는 '불참' 응답자를 제외한 인원 (예정 + 확정).
+    // 올 의향이 있던 사람 중 실제로 출석한 비율을 측정.
+    const eligible = list.filter(a => a.status !== '불참').length;
+    const rate = eligible === 0 ? 0 : Math.round((present / eligible) * 100);
+    return { total, present, absent, rate, eligible };
+  }
+
+  function filteredList() {
+    let list = attendees;
+    if (activeFilter === 'present') list = list.filter(a => a.present);
+    else if (activeFilter === 'absent') list = list.filter(a => !a.present);
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(a =>
+        a.name.toLowerCase().includes(q) ||
+        a.contact.toLowerCase().includes(q) ||
+        a.org.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }
+
+  function escapeCsv(v) {
+    const s = String(v == null ? '' : v);
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function exportCSV() {
+    if (attendees.length === 0) {
+      alert('내보낼 데이터가 없습니다.');
+      return;
+    }
+    const headers = ['이름', '연락처', '소속', '참석확인', '출석여부', '출석시각', '등록일시'];
+    const rows = attendees.map(a => [
+      a.name, a.contact, a.org, a.status,
+      a.present ? '출석' : '미출석',
+      a.checkedInAt ? new Date(a.checkedInAt).toLocaleString('ko-KR') : '',
+      new Date(a.createdAt).toLocaleString('ko-KR')
+    ].map(escapeCsv).join(','));
+    const csv = '﻿' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = '행사참석자_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function renderStats() {
+    const s = calculateStats(attendees);
+    $('statTotal').textContent = s.total;
+    $('statPresent').textContent = s.present;
+    $('statAbsent').textContent = s.absent;
+    $('progressPercent').textContent = s.rate + '%';
+    $('progressFill').style.width = s.rate + '%';
+    $('progressLabel').textContent = s.eligible > 0
+      ? '출석률 · 예정+확정 ' + s.eligible + '명 기준'
+      : '출석률';
+  }
+
+  function createCell(className) {
+    const td = document.createElement('td');
+    if (className) td.className = className;
+    return td;
+  }
+
+  function buildRow(a) {
+    const tr = document.createElement('tr');
+
+    // Check icon
+    const checkTd = createCell();
+    const check = document.createElement('span');
+    check.className = 'check-icon' + (a.present ? '' : ' empty');
+    check.textContent = a.present ? '✓' : '·';
+    check.dataset.id = a.id;
+    check.dataset.action = 'toggle';
+    checkTd.appendChild(check);
+    tr.appendChild(checkTd);
+
+    // Name
+    const nameTd = createCell();
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'name-cell';
+    nameSpan.textContent = a.name;
+    nameSpan.dataset.id = a.id;
+    nameSpan.dataset.action = 'toggle';
+    nameTd.appendChild(nameSpan);
+    tr.appendChild(nameTd);
+
+    // Org + contact
+    const orgTd = createCell('col-org');
+    const orgLine = document.createElement('div');
+    orgLine.className = 'org-line';
+    orgLine.textContent = a.org || '-';
+    orgTd.appendChild(orgLine);
+    if (a.contact) {
+      const contactLine = document.createElement('div');
+      contactLine.className = 'contact-line';
+      contactLine.textContent = a.contact;
+      orgTd.appendChild(contactLine);
+    }
+    tr.appendChild(orgTd);
+
+    // Status
+    const statusTd = createCell('col-status');
+    const badge = document.createElement('span');
+    badge.className = 'badge' + (a.status === '확정' ? ' accent' : '');
+    badge.textContent = a.status;
+    statusTd.appendChild(badge);
+    tr.appendChild(statusTd);
+
+    // Delete
+    const deleteTd = createCell();
+    const delBtn = document.createElement('button');
+    delBtn.className = 'delete-btn';
+    delBtn.textContent = '삭제';
+    delBtn.dataset.id = a.id;
+    delBtn.dataset.action = 'delete';
+    deleteTd.appendChild(delBtn);
+    tr.appendChild(deleteTd);
+
+    return tr;
+  }
+
+  function renderTable() {
+    const list = filteredList();
+    const tbody = $('tableBody');
+    tbody.replaceChildren();
+
+    if (list.length === 0) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = attendees.length === 0
+        ? '아직 등록된 참석자가 없습니다.'
+        : '조건에 맞는 참석자가 없습니다.';
+      td.appendChild(empty);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    list.forEach(a => fragment.appendChild(buildRow(a)));
+    tbody.appendChild(fragment);
+  }
+
+  function render() {
+    renderStats();
+    renderTable();
+  }
+
+  $('tableBody').addEventListener('click', (e) => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const id = el.dataset.id;
+    if (el.dataset.action === 'toggle') togglePresent(id);
+    else if (el.dataset.action === 'delete') deleteAttendee(id);
+  });
+
+  $('addBtn').addEventListener('click', addAttendee);
+  ['nameInput', 'contactInput', 'orgInput'].forEach(id => {
+    $(id).addEventListener('keypress', e => { if (e.key === 'Enter') addAttendee(); });
+  });
+  $('searchInput').addEventListener('input', e => {
+    searchQuery = e.target.value.trim();
+    renderTable();
+  });
+  $('exportBtn').addEventListener('click', exportCSV);
+  $('resetBtn').addEventListener('click', resetAllPresent);
+
+  $('filterTabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('.filter-tab');
+    if (!tab) return;
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    activeFilter = tab.dataset.filter;
+    renderTable();
+  });
+
+  // 사용 안내 토글 — 첫 방문(명단 비어있고 토글 기록도 없음)이면 펼쳐서 시작
+  function initGuide() {
+    const guide = $('guide');
+    const header = $('guideHeader');
+    const saved = localStorage.getItem(GUIDE_KEY);
+    const shouldCollapse = saved === null ? attendees.length > 0 : saved === 'true';
+    guide.classList.toggle('collapsed', shouldCollapse);
+    header.setAttribute('aria-expanded', String(!shouldCollapse));
+
+    const toggle = () => {
+      const nowCollapsed = !guide.classList.contains('collapsed');
+      guide.classList.toggle('collapsed', nowCollapsed);
+      header.setAttribute('aria-expanded', String(!nowCollapsed));
+      localStorage.setItem(GUIDE_KEY, String(nowCollapsed));
+    };
+    header.addEventListener('click', toggle);
+    header.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  }
+
+  initGuide();
+  render();
+</script>
+</body>
+</html>
